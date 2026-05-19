@@ -2,6 +2,7 @@
 
 import sys
 import os
+import json
 
 from ppt_parser import extract_ppt_text
 from ai_script_generator import generate_ai_script
@@ -11,6 +12,17 @@ from video_merger import merge_videos
 from gen_json import extract_only_images
 from delete_image import run_deletion_test
 from add_voice import merge_video_audio
+from image_understanding import run_image_understanding
+
+
+def get_ppt_page_count(extract_json_path):
+    """从extract_pic.json获取PPT总页数"""
+    try:
+        with open(extract_json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return len(data.get("slides", []))
+    except:
+        return 0
 
 
 def main():
@@ -27,7 +39,6 @@ def main():
 
     enable_interactive = True
 
-    # 是否关闭交互模式
     if len(sys.argv) > 2 and sys.argv[2] == "--no-interactive":
         enable_interactive = False
 
@@ -56,29 +67,9 @@ def main():
 
         sys.exit(1)
 
-    # Step2 AI生成讲稿
-    print("\n[步骤2] AI生成讲稿...")
-
-    if not generate_ai_script(
-        ppt_text,
-        enable_interactive=enable_interactive
-    ):
-
-        print("AI讲稿生成失败")
-
-        sys.exit(1)
-
-    # Step3 语音生成
-    print("\n[步骤3] 语音生成...")
-
-    if not synthesize_voices():
-
-        print("语音生成失败")
-
-        sys.exit(1)
-
-    # Step4 提取图片元素
-    print("\n[步骤4] 提取图片元素...")
+    # Step2 提前提取图片元素（原步骤4提前到这里）
+    # 目的：让图片可供AI理解，同时为后续步骤准备好数据
+    print("\n[步骤2] 提取图片元素...")
 
     if not extract_only_images(
         ppt_path,
@@ -89,8 +80,51 @@ def main():
 
         sys.exit(1)
 
-    # Step5 删除图片元素
-    print("\n[步骤5] 删除图片元素...")
+    total_pages = get_ppt_page_count("extract_pic.json")
+
+    # Step3 图片理解（新增）
+    # 逐页询问用户是否需要对图片进行AI理解
+    # 理解的图片描述将融入讲稿生成
+    image_descriptions = {}
+
+    if enable_interactive:
+
+        print("\n[步骤3] 图片理解（可选）...")
+
+        image_descriptions = run_image_understanding(
+            ppt_path,
+            "extract_pic.json",
+            total_pages
+        )
+
+    else:
+
+        print("\n[步骤3] 跳过图片理解（非交互模式）")
+
+    # Step4 AI生成讲稿（融入图片描述）
+    print("\n[步骤4] AI生成讲稿...")
+
+    if not generate_ai_script(
+        ppt_text,
+        enable_interactive=enable_interactive,
+        image_descriptions=image_descriptions
+    ):
+
+        print("AI讲稿生成失败")
+
+        sys.exit(1)
+
+    # Step5 语音生成
+    print("\n[步骤5] 语音生成...")
+
+    if not synthesize_voices():
+
+        print("语音生成失败")
+
+        sys.exit(1)
+
+    # Step6 删除图片元素（图片已在步骤2提取，现在只执行删除）
+    print("\n[步骤6] 删除图片元素...")
 
     if not run_deletion_test(
         "extract_pic.json",
@@ -101,8 +135,8 @@ def main():
 
         sys.exit(1)
 
-    # Step6 生成动画视频
-    print("\n[步骤6] 生成动画视频...")
+    # Step7 生成动画视频
+    print("\n[步骤7] 生成动画视频...")
 
     if not generate_all_ppt_videos():
 
@@ -110,8 +144,8 @@ def main():
 
         sys.exit(1)
 
-    # Step7 合并音频
-    print("\n[步骤7] 合并音频...")
+    # Step8 合并音频
+    print("\n[步骤8] 合并音频...")
 
     if not merge_video_audio():
 
@@ -119,8 +153,8 @@ def main():
 
         sys.exit(1)
 
-    # Step8 合并最终视频
-    print("\n[步骤8] 合并最终视频...")
+    # Step9 合并最终视频
+    print("\n[步骤9] 合并最终视频...")
 
     success, final_video = merge_videos()
 

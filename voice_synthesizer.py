@@ -24,9 +24,8 @@ from config import (
 )
 
 
-# =========================
-# 官方 Ws_Param（不要改结构）
-# =========================
+# 官方 Ws_Param
+
 class Ws_Param(object):
 
     def __init__(self, APPID, APIKey, APISecret, Text):

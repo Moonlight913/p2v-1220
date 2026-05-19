@@ -6,8 +6,25 @@ AI讲稿生成模块 - 调用硅基流动API生成每页讲稿
 
 import requests
 import os
+import shutil
+from datetime import datetime
 from config import SILICONFLOW_API_KEY, SILICONFLOW_API_URL, SCRIPT_DIR
 
+def calculate_speed(text):
+    """
+    根据讲稿长度自动调整语速
+    """
+
+    text_len = len(text)
+
+    if text_len < 30:
+        return 40
+
+    elif text_len < 60:
+        return 50
+
+    else:
+        return 60
 def call_ai_api(messages):
     """
     调用硅基流动API
@@ -54,7 +71,32 @@ def call_ai_api(messages):
 
         print(f"解析AI响应失败: {e}")
         return None
-    
+
+def backup_script(page_num, current_content):
+    """
+    备份旧版本讲稿
+    """
+
+    history_dir = os.path.join(
+        SCRIPT_DIR,
+        "history",
+        f"page_{page_num}"
+    )
+
+    os.makedirs(history_dir, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    backup_file = os.path.join(
+        history_dir,
+        f"backup_{timestamp}.txt"
+    )
+
+    with open(backup_file, "w", encoding="utf-8") as f:
+        f.write(current_content)
+
+    print(f"已备份历史版本: {backup_file}")
+
 def clean_ai_script(raw_text):
     """
     清理AI返回内容，提取纯讲稿
@@ -103,21 +145,29 @@ def clean_ai_script(raw_text):
 
     return raw_text[:70]
 
-def generate_ai_script(ppt_text, enable_interactive=True):
+def generate_ai_script(ppt_text, enable_interactive=True, image_descriptions=None):
     """
     AI生成讲稿
 
     参数:
         ppt_text: PPT文本内容
         enable_interactive: 是否启用交互模式
+        image_descriptions: {page_num: "图片描述"}，可选
     """
 
+    image_context = ""
+    if image_descriptions:
+        parts = ["\n各页PPT中的图片内容："]
+        for pn in sorted(image_descriptions.keys()):
+            parts.append(f"第{pn}页图片: {image_descriptions[pn]}")
+        image_context = "\n".join(parts)
 
     prompt = f"""
 你是一位专业老师。
 
 请根据以下PPT内容，
 为每一页生成课堂讲稿。
+{image_context}
 
 PPT内容：
 {ppt_text}
@@ -194,9 +244,10 @@ def interactive_edit():
         print("1. 查看所有讲稿")
         print("2. 手动编辑指定页面")
         print("3. AI对话式优化讲稿")
-        print("4. 退出编辑模式")
+        print("4. 查看历史版本")
+        print("5. 退出编辑模式")
 
-        choice = input("请输入选项 (1-4): ").strip()
+        choice = input("请输入选项 (1-5): ").strip()
 
         if choice == "1":
             view_all_scripts(script_files)
@@ -208,6 +259,9 @@ def interactive_edit():
             chat_edit_script(script_files)
 
         elif choice == "4":
+            view_history_versions()
+
+        elif choice == "5":
             print("退出编辑模式")
             break
 
@@ -255,6 +309,7 @@ def edit_single_page(script_files):
 
         with open(file_path, "r", encoding="utf-8") as f:
             current_content = f.read().strip()
+        backup_script(page_num, current_content)  
 
         print("\n当前内容：")
         print(current_content)
@@ -309,10 +364,10 @@ def chat_edit_script(script_files):
             return
 
         file_path = os.path.join(SCRIPT_DIR, script_file)
-
+        
         with open(file_path, "r", encoding="utf-8") as f:
-
             current_content = f.read().strip()
+        backup_script(page_num, current_content)
 
         print("\n当前讲稿：")
         print(current_content)
@@ -404,6 +459,38 @@ def chat_edit_script(script_files):
 
         print("页码输入错误")
 
+def view_history_versions():
+    """
+    查看历史版本
+    """
+
+    history_root = os.path.join(SCRIPT_DIR, "history")
+
+    if not os.path.exists(history_root):
+
+        print("暂无历史版本")
+        return
+
+    for page_dir in os.listdir(history_root):
+
+        page_path = os.path.join(history_root, page_dir)
+
+        if not os.path.isdir(page_path):
+            continue
+
+        print(f"\n{page_dir} 历史版本：")
+
+        backups = sorted(os.listdir(page_path))
+
+        for backup_file in backups:
+
+            backup_path = os.path.join(page_path, backup_file)
+
+            with open(backup_path, "r", encoding="utf-8") as f:
+
+                content = f.read().strip()
+
+            print(f"{backup_file} -> {content}")
 def validate_and_extract_script(ai_response):
     """
     验证AI返回格式并保存讲稿
