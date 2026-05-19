@@ -8,13 +8,12 @@ import requests
 import os
 from config import SILICONFLOW_API_KEY, SILICONFLOW_API_URL, SCRIPT_DIR
 
-
-def call_ai_api(prompt):
+def call_ai_api(messages):
     """
     调用硅基流动API
 
     参数:
-        prompt: 提示词
+        messages: 对话消息列表
 
     返回:
         str: AI响应内容
@@ -27,17 +26,13 @@ def call_ai_api(prompt):
 
     data = {
         "model": "Qwen/Qwen3-8B",
-        "messages": [
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
+        "messages": messages,
         "max_tokens": 1000,
         "temperature": 0.7
     }
 
     try:
+
         response = requests.post(
             SILICONFLOW_API_URL,
             headers=headers,
@@ -51,13 +46,15 @@ def call_ai_api(prompt):
         return ai_response["choices"][0]["message"]["content"]
 
     except requests.exceptions.RequestException as e:
+
         print(f"API调用失败: {e}")
         return None
 
     except (KeyError, IndexError) as e:
+
         print(f"解析AI响应失败: {e}")
         return None
-
+    
 def clean_ai_script(raw_text):
     """
     清理AI返回内容，提取纯讲稿
@@ -86,9 +83,7 @@ def clean_ai_script(raw_text):
             "修改后的讲稿:",
             "好的，",
             "好的",
-            "以下是",
-            "讲稿：",
-            "讲稿:"
+            "以下是"
         ]
 
         for prefix in prefixes:
@@ -104,9 +99,9 @@ def clean_ai_script(raw_text):
                 pass
 
         if line:
-            return line[:50]
+            return line[:70]
 
-    return raw_text[:50]
+    return raw_text[:70]
 
 def generate_ai_script(ppt_text, enable_interactive=True):
     """
@@ -117,31 +112,43 @@ def generate_ai_script(ppt_text, enable_interactive=True):
         enable_interactive: 是否启用交互模式
     """
 
+
     prompt = f"""
 你是一位专业老师。
 
 请根据以下PPT内容，
-为每一页生成简短自然的课堂讲稿。
+为每一页生成课堂讲稿。
 
 PPT内容：
 {ppt_text}
 
 要求：
-1. 每页讲稿不超过50字
-2. 语言自然，适合口语表达
-3. 可适当幽默
-4. 必须严格按以下格式返回：
+1. 每页生成一句真实讲稿
+2. 每页不超过70字
+3. 语言自然，适合课堂讲解
+4. 不要输出“讲稿内容”“示例”等占位词
+5. 严格按照下面格式输出：
 
-第1页：讲稿内容
-第2页：讲稿内容
-第3页：讲稿内容
+第1页：这里填写真实讲稿
+第2页：这里填写真实讲稿
+第3页：这里填写真实讲稿
 
-不要返回任何额外解释。
+不要添加任何解释。
 """
-
     print("正在调用AI生成讲稿...")
 
-    script_content = call_ai_api(prompt)
+    messages = [
+        {
+            "role": "system",
+            "content": "你是一位专业教师，负责生成课堂讲稿。"
+        },
+        {
+            "role": "user",
+            "content": prompt
+        }
+    ]
+
+    script_content = call_ai_api(messages)
 
     if script_content is None:
         print("AI讲稿生成失败")
@@ -185,8 +192,8 @@ def interactive_edit():
 
         print("\n请选择操作：")
         print("1. 查看所有讲稿")
-        print("2. 编辑指定页面讲稿")
-        print("3. AI重新生成指定页面讲稿")
+        print("2. 手动编辑指定页面")
+        print("3. AI对话式优化讲稿")
         print("4. 退出编辑模式")
 
         choice = input("请输入选项 (1-4): ").strip()
@@ -198,7 +205,7 @@ def interactive_edit():
             edit_single_page(script_files)
 
         elif choice == "3":
-            regenerate_with_feedback(script_files)
+            chat_edit_script(script_files)
 
         elif choice == "4":
             print("退出编辑模式")
@@ -252,7 +259,7 @@ def edit_single_page(script_files):
         print("\n当前内容：")
         print(current_content)
 
-        print("\n请输入新的讲稿内容（最多50字）")
+        print("\n请输入新的讲稿内容（最多70字）")
         print("输入完成后连续按两次回车结束：")
 
         lines = []
@@ -273,9 +280,9 @@ def edit_single_page(script_files):
             return
 
         new_content = clean_ai_script(new_content)
-        if len(new_content) > 50:
-            print("内容超过50字，已自动截断")
-            new_content = new_content[:50]
+        if len(new_content) > 70:
+            print("内容超过70字，已自动截断")
+            new_content = new_content[:70]
 
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(new_content)
@@ -285,10 +292,9 @@ def edit_single_page(script_files):
     except ValueError:
         print("页码输入错误")
 
-
-def regenerate_with_feedback(script_files):
+def chat_edit_script(script_files):
     """
-    AI重新生成指定页面讲稿
+    AI多轮对话优化讲稿
     """
 
     try:
@@ -298,62 +304,105 @@ def regenerate_with_feedback(script_files):
         script_file = f"page_{page_num}.txt"
 
         if script_file not in script_files:
+
             print("未找到该页")
             return
 
         file_path = os.path.join(SCRIPT_DIR, script_file)
 
         with open(file_path, "r", encoding="utf-8") as f:
+
             current_content = f.read().strip()
 
         print("\n当前讲稿：")
         print(current_content)
 
-        feedback = input("\n请输入修改意见: ").strip()
+        print("\n进入AI对话优化模式")
+        print("输入 exit 结束优化")
 
-        if not feedback:
-            print("未输入修改意见")
-            return
+        conversation_history = [
+            {
+                "role": "system",
+                "content": (
+                    "你是一位专业教师，"
+                    "负责优化课堂讲稿。"
+                    "讲稿必须："
+                    "1. 不超过70字"
+                    "2. 适合课堂讲解"
+                    "3. 语言自然"
+                    "4. 只返回修改后的讲稿"
+                )
+            },
+            {
+                "role": "user",
+                "content": f"当前讲稿：{current_content}"
+            }
+        ]
 
-        prompt = f"""
-请根据用户意见修改讲稿。
+        latest_script = current_content
 
-当前讲稿：
-{current_content}
+        while True:
 
-用户修改意见：
-{feedback}
+            feedback = input("\n你：").strip()
 
-要求：
-1. 不超过50字
-2. 更适合课堂讲解
-3. 语言自然
-4. 只返回修改后的讲稿
-"""
+            if feedback.lower() == "exit":
 
-        print("\n正在重新生成...")
+                break
 
-        new_content = call_ai_api(prompt)
+            if not feedback:
 
-        if new_content is None:
-            print("AI重新生成失败")
-            return
+                continue
 
-        # 清理AI返回内容
-        new_content = clean_ai_script(new_content)
+            conversation_history.append(
+                {
+                    "role": "user",
+                    "content": feedback
+                }
+            )
 
-        if len(new_content) > 50:
-            new_content = new_content[:50]
+            print("\nAI正在优化讲稿...")
 
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(new_content)
+            ai_response = call_ai_api(conversation_history)
 
-        print("\n✅ 新讲稿：")
-        print(new_content)
+            if ai_response is None:
+
+                print("AI生成失败")
+                continue
+
+            ai_response = clean_ai_script(ai_response)
+
+            if len(ai_response) > 70:
+
+                ai_response = ai_response[:70]
+
+            latest_script = ai_response
+
+            conversation_history.append(
+                {
+                    "role": "assistant",
+                    "content": ai_response
+                }
+            )
+
+            print(f"\nAI：{ai_response}")
+
+        save_choice = input("\n是否保存最终讲稿？(y/n): ").strip().lower()
+
+        if save_choice == "y":
+
+            with open(file_path, "w", encoding="utf-8") as f:
+
+                f.write(latest_script)
+
+            print("✅ 讲稿已保存")
+
+        else:
+
+            print("未保存修改")
 
     except ValueError:
-        print("页码输入错误")
 
+        print("页码输入错误")
 
 def validate_and_extract_script(ai_response):
     """
@@ -380,8 +429,8 @@ def validate_and_extract_script(ai_response):
                     page_part.replace("第", "").replace("页", "")
                 )
 
-                if len(script_part) > 50:
-                    script_part = script_part[:50]
+                if len(script_part) > 70:
+                    script_part = script_part[:70]
 
                 page_scripts[page_num] = clean_ai_script(script_part)
 
