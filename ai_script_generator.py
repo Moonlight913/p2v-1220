@@ -6,6 +6,7 @@ AI讲稿生成模块 - 调用硅基流动API生成每页讲稿
 
 import requests
 import os
+from datetime import datetime
 from config import SILICONFLOW_API_KEY, SILICONFLOW_API_URL, SCRIPT_DIR
 
 def call_ai_api(messages):
