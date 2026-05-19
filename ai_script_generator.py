@@ -6,25 +6,8 @@ AI讲稿生成模块 - 调用硅基流动API生成每页讲稿
 
 import requests
 import os
-import shutil
-from datetime import datetime
 from config import SILICONFLOW_API_KEY, SILICONFLOW_API_URL, SCRIPT_DIR
 
-def calculate_speed(text):
-    """
-    根据讲稿长度自动调整语速
-    """
-
-    text_len = len(text)
-
-    if text_len < 30:
-        return 40
-
-    elif text_len < 60:
-        return 50
-
-    else:
-        return 60
 def call_ai_api(messages):
     """
     调用硅基流动API
