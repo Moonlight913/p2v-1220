@@ -377,19 +377,15 @@ def chat_edit_script(script_files):
                 "content": f"当前讲稿：{current_content}"
             }
         ]
-
+        
         latest_script = current_content
 
         while True:
-
             feedback = input("\n你：").strip()
-
             if feedback.lower() == "exit":
-
                 break
 
             if not feedback:
-
                 continue
 
             conversation_history.append(
